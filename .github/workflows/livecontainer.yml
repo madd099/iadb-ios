@@ -11,67 +11,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: List directory contents
-        run: |
-          echo "--- Listing root ---"
-          ls -la
-          echo "--- Searching for projects ---"
-          find . -name "*.xcodeproj"
-          find . -name "*.xcworkspace"
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
 
       - name: Build App (Unsigned)
         run: |
-          # Ищем workspace, игнорируя Pods
-          WORKSPACE=$(find . -name "*.xcworkspace" -not -path "*/Pods/*" | head -n 1)
-          # Ищем project
-          PROJECT=$(find . -name "*.xcodeproj" | head -n 1)
+          PROJECT=$(find . -name "*.xcodeproj" -maxdepth 1 | head -n 1)
+          echo "Found project: $PROJECT"
           
-          if [ -n "$WORKSPACE" ]; then
-            echo "Found workspace: $WORKSPACE"
-            SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" | awk '/Schemes:/ {found=1; next} found && NF {print $0}' | head -n 1 | xargs)
-            if [ -z "$SCHEME" ]; then
-              SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-            fi
-            echo "Using scheme: $SCHEME"
-            
-            xcodebuild \
-              -workspace "$WORKSPACE" \
-              -scheme "$SCHEME" \
-              -configuration Release \
-              -sdk iphoneos \
-              -destination 'generic/platform=iOS' \
-              -derivedDataPath ./build \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              ONLY_ACTIVE_ARCH=NO \
-              build
-              
-          elif [ -n "$PROJECT" ]; then
-            echo "Found project: $PROJECT"
-            SCHEME=$(xcodebuild -list -project "$PROJECT" | awk '/Schemes:/ {found=1; next} found && NF {print $0}' | head -n 1 | xargs)
-            if [ -z "$SCHEME" ]; then
-              SCHEME=$(basename "$PROJECT" .xcodeproj)
-            fi
-            echo "Using scheme: $SCHEME"
-            
-            xcodebuild \
-              -project "$PROJECT" \
-              -scheme "$SCHEME" \
-              -configuration Release \
-              -sdk iphoneos \
-              -destination 'generic/platform=iOS' \
-              -derivedDataPath ./build \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              ONLY_ACTIVE_ARCH=NO \
-              build
-              
-          else
-            echo "ERROR: No Xcode project or workspace found!"
-            exit 1
+          SCHEME=$(xcodebuild -list -project "$PROJECT" | awk '/Schemes:/ {found=1; next} found && NF {print $0}' | head -n 1 | xargs)
+          if [ -z "$SCHEME" ]; then
+            SCHEME=$(basename "$PROJECT" .xcodeproj)
           fi
+          echo "Using scheme: $SCHEME"
+          
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ./build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ONLY_ACTIVE_ARCH=NO \
+            build
 
       - name: Create IPA
         run: |
