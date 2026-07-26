@@ -1,0 +1,47 @@
+name: Build IPA for LiveContainer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Find Xcode project and scheme
+        id: proj
+        run: |
+          PROJECT=$(find . -name "*.xcodeproj" -maxdepth 1 | head -n 1)
+          echo "project=$PROJECT" >> $GITHUB_OUTPUT
+          SCHEME=$(xcodebuild -list -project "$PROJECT" | grep -A 1 "Schemes:" | tail -n 1 | xargs)
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+
+      - name: Build App (Unsigned)
+        run: |
+          xcodebuild \
+            -project "${{ steps.proj.outputs.project }}" \
+            -scheme "${{ steps.proj.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ./build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Create IPA
+        run: |
+          APP_PATH=$(find ./build/Build/Products -name "*.app" -type d | head -n 1)
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r app.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iadb-livecontainer-ipa
+          path: app.ipa
